@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clacker — Split-flap board</title>
+<meta name="author" content="Chirag Patnaik">
+<meta name="description" content="Browser-native split-flap display. Type a message, pick a style, watch it flip.">
+<style>
+/* ── Reset & Root ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --tile-w: 40px;
+  --tile-h: 58px;
+  --tile-gap: 3px;
+  --board-pad: 20px;
+  --tile-font: 28px;
+  --tile-font-family: Impact, "Arial Narrow", sans-serif;
+
+  /* Default preset: Classic */
+  --tile-bg: #1c1c1e;
+  --tile-fg: #ffffff;
+  --tile-hinge: #000000;
+  --frame-bg: #0a0a0a;
+  --frame-border: #252525;
+
+  --page-bg: #0d0d0d;
+  --ui-bg: #161616;
+  --ui-border: #2a2a2a;
+  --ui-text: #aaa;
+  --ui-text-dim: #444;
+  --flip-dur: 60ms;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--ui-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 60px;
+}
+
+/* ── Header ───────────────────────────────────────────────────── */
+header {
+  width: 100%;
+  max-width: 983px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.logo {
+  font-family: 'Courier New', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.logo-sub {
+  font-size: 11px;
+  color: var(--ui-text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ── Board Wrap ───────────────────────────────────────────────── */
+#boardWrap {
+  position: relative;
+  padding: var(--board-pad);
+  background: var(--frame-bg);
+  border: 1px solid var(--frame-border);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px #000,
+    0 24px 64px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+/* Scan-line overlay */
+#boardWrap::after {
+  content: '';
+  position: absolute;
+  inset: var(--board-pad);
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.06) 3px,
+    rgba(0,0,0,0.06) 4px
+  );
+  pointer-events: none;
+  border-radius: 2px;
+  z-index: 30;
+}
+
+/* ── Board Grid ───────────────────────────────────────────────── */
+#board {
+  display: grid;
+  grid-template-columns: repeat(22, var(--tile-w));
+  grid-template-rows: repeat(6, var(--tile-h));
+  gap: var(--tile-gap);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Tile ─────────────────────────────────────────────────────── */
+.tile {
+  position: relative;
+  width: var(--tile-w);
+  height: var(--tile-h);
+  perspective: 180px;
+  border-radius: 2px;
+}
+
+.half {
+  position: absolute;
+  width: 100%;
+  height: calc(var(--tile-h) / 2);
+  overflow: hidden;
+  background: var(--tile-bg);
+  transition: background 0.3s;
+}
+
+.half.upper {
+  top: 0;
+  border-radius: 2px 2px 0 0;
+  background-image: linear-gradient(to bottom, rgba(255,255,255,0.03) 0%, transparent 100%);
+}
+
+.half.lower {
+  bottom: 0;
+  border-radius: 0 0 2px 2px;
+  background-image: linear-gradient(to top, rgba(0,0,0,0.18) 0%, transparent 100%);
+}
+
+.hi {
+  width: 100%;
+  height: var(--tile-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--tile-font-family);
+  font-weight: 700;
+  font-size: var(--tile-font);
+  color: var(--tile-fg);
+  user-select: none;
+  transition: color 0.3s;
+  letter-spacing: 0;
+}
+
+.half.lower .hi { margin-top: calc(var(--tile-h) * -0.5); }
+
+/* ── Flaps ────────────────────────────────────────────────────── */
+.flap {
+  position: absolute;
+  width: 100%;
+  height: calc(var(--tile-h) / 2);
+  overflow: hidden;
+  background: var(--tile-bg);
+  z-index: 10;
+  backface-visibility: hidden;
+  transition: background 0.3s;
+}
+
+.flap.upper-flap {
+  top: 0;
+  transform-origin: bottom center;
+  border-radius: 2px 2px 0 0;
+  background-image: linear-gradient(to bottom, rgba(255,255,255,0.03) 0%, transparent 100%);
+}
+
+.flap.lower-flap {
+  bottom: 0;
+  transform-origin: top center;
+  transform: rotateX(90deg);
+  border-radius: 0 0 2px 2px;
+  background-image: linear-gradient(to top, rgba(0,0,0,0.18) 0%, transparent 100%);
+}
+
+.flap.lower-flap .hi { margin-top: calc(var(--tile-h) * -0.5); }
+
+/* ── Flip Animations ──────────────────────────────────────────── */
+@keyframes flipUp {
+  from { transform: rotateX(0deg); }
+  to   { transform: rotateX(-90deg); }
+}
+
+@keyframes flipDown {
+  from { transform: rotateX(90deg); }
+  to   { transform: rotateX(0deg); }
+}
+
+.tile.flipping .flap.upper-flap {
+  animation: flipUp var(--flip-dur) cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.tile.flipping .flap.lower-flap {
+  animation: flipDown var(--flip-dur) cubic-bezier(0, 0, 0.6, 1) forwards;
+  animation-delay: calc(var(--flip-dur) * 0.35);
+}
+
+.tile-hinge {
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  height: 2px;
+  background: var(--tile-hinge);
+  z-index: 20;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* ── Controls ─────────────────────────────────────────────────── */
+#controls {
+  width: 983px;
+  max-width: 100%;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.input-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+#textInput {
+  flex: 1;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  padding: 10px 13px;
+  resize: none;
+  outline: none;
+  line-height: 1.55;
+  min-height: 64px;
+  transition: border-color 0.2s;
+}
+
+#textInput:focus { border-color: #484848; }
+#textInput::placeholder { color: #333; }
+
+#btnRun {
+  background: #fff;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  padding: 0 26px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s, transform 0.1s;
+  min-width: 76px;
+}
+
+#btnRun:hover:not(:disabled) { opacity: 0.88; }
+#btnRun:active:not(:disabled) { transform: scale(0.97); }
+#btnRun:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Preset row ───────────────────────────────────────────────── */
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.row-label {
+  font-size: 11px;
+  color: var(--ui-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-right: 2px;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
+.preset-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  color: #666;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover { border-color: #444; color: #aaa; }
+.preset-btn.active { border-color: #666; color: #eee; background: #222; }
+
+.preset-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Options row (font + sound + cycle) ───────────────────────── */
+.options-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.opt-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.opt-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--ui-border);
+  flex-shrink: 0;
+}
+
+/* Font select */
+#fontPicker {
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  color: #aaa;
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+  transition: border-color 0.15s;
+  min-width: 140px;
+}
+
+#fontPicker:hover, #fontPicker:focus { border-color: #444; color: #eee; }
+#fontPicker option { background: #1a1a1a; }
+
+/* Sound button */
+#btnSound {
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  color: #666;
+  font-size: 14px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+
+#btnSound:hover { border-color: #444; color: #aaa; }
+#btnSound.active { border-color: #666; color: #eee; background: #222; }
+
+/* Cycle controls */
+.cycle-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+  color: #666;
+  font-size: 12px;
+  transition: color 0.15s;
+}
+
+.cycle-label:hover { color: #aaa; }
+.cycle-label input[type="checkbox"] { accent-color: #888; cursor: pointer; }
+
+#cycleInterval {
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  color: #aaa;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  padding: 4px 8px;
+  width: 52px;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.15s, opacity 0.2s;
+}
+
+#cycleInterval:hover, #cycleInterval:focus { border-color: #444; color: #eee; }
+#cycleInterval:disabled { opacity: 0.35; }
+
+.cycle-unit { font-size: 11px; color: var(--ui-text-dim); }
+
+/* Cycle progress dot */
+.cycle-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #333;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.cycle-indicator.ticking { background: #4caf50; }
+
+/* ── Bottom row ───────────────────────────────────────────────── */
+.bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#charCount {
+  font-size: 11px;
+  color: var(--ui-text-dim);
+  font-family: 'Courier New', monospace;
+}
+
+#btnFullscreen {
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  color: var(--ui-text-dim);
+  font-size: 12px;
+  padding: 5px 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+#btnFullscreen:hover { border-color: #444; color: #888; }
+
+/* ── Fullscreen ───────────────────────────────────────────────── */
+body.fullscreen-active {
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.fullscreen-active header,
+body.fullscreen-active #controls { display: none; }
+
+body.fullscreen-active #boardWrap {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+body.fullscreen-active #boardWrap::after { display: none; }
+
+.gh-link {
+  position: fixed;
+  bottom: 18px;
+  right: 20px;
+  color: #2a2a2a;
+  text-decoration: none;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  transition: color 0.2s;
+  z-index: 100;
+}
+
+.gh-link:hover { color: #666; }
+body.fullscreen-active .gh-link { display: none; }
+
+/* ── Help button & popover ────────────────────────────────────── */
+.help-wrap {
+  position: relative;
+  margin-left: auto;
+}
+
+.btn-help {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #333;
+  background: transparent;
+  color: #444;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-help:hover, .btn-help.open { border-color: #666; color: #aaa; background: #1a1a1a; }
+
+.help-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 300px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  z-index: 200;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #999;
+}
+
+/* Arrow */
+.help-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  background: #1a1a1a;
+  border-left: 1px solid #333;
+  border-top: 1px solid #333;
+  transform: rotate(45deg);
+}
+
+.help-popover.open { display: block; }
+
+.help-popover h3 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 10px;
+}
+
+.help-popover h3 + h3 { margin-top: 14px; }
+
+.help-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  gap: 12px;
+}
+
+.help-key {
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  color: #ccc;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  padding: 1px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.help-desc { color: #666; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">Clacker</span>
+  <span class="logo-sub">Split-flap board</span>
+
+  <div class="help-wrap">
+    <button class="btn-help" id="btnHelp" title="Help">?</button>
+    <div class="help-popover" id="helpPopover">
+
+      <h3>Keyboard</h3>
+      <div class="help-row"><span class="help-desc">Run animation</span><span class="help-key">Enter</span></div>
+      <div class="help-row"><span class="help-desc">New line in message</span><span class="help-key">Shift + Enter</span></div>
+      <div class="help-row"><span class="help-desc">Toggle fullscreen</span><span class="help-key">F</span></div>
+      <div class="help-row"><span class="help-desc">Exit fullscreen</span><span class="help-key">Esc / dbl-click</span></div>
+
+      <h3>Multiple slides</h3>
+      <div class="help-row"><span class="help-desc">Separate slides with <span class="help-key">---</span> on its own line. Auto-cycle flips through them on the set interval.</span></div>
+
+      <h3>Controls</h3>
+      <div class="help-row"><span class="help-desc">Style presets</span><span class="help-key">colour themes</span></div>
+      <div class="help-row"><span class="help-desc">Font picker</span><span class="help-key">10 typefaces</span></div>
+      <div class="help-row"><span class="help-desc">🔊 / 🔇</span><span class="help-desc">toggle flip sounds</span></div>
+      <div class="help-row"><span class="help-desc">Auto-cycle interval</span><span class="help-key">5 – 600 sec</span></div>
+
+    </div>
+  </div>
+</header>
+
+<div id="boardWrap">
+  <div id="board"></div>
+</div>
+
+<div id="controls">
+
+  <div class="input-row">
+    <textarea id="textInput" rows="3"
+      placeholder="Type your message…&#10;&#10;Separate slides with --- on its own line for auto-cycle."
+      spellcheck="false" autocomplete="off"></textarea>
+    <button id="btnRun">RUN</button>
+  </div>
+
+  <div class="preset-row">
+    <span class="row-label">Style</span>
+    <button class="preset-btn active" data-preset="classic">
+      <span class="preset-dot" style="background:#fff"></span>Classic
+    </button>
+    <button class="preset-btn" data-preset="airport">
+      <span class="preset-dot" style="background:#ffc200"></span>Airport
+    </button>
+    <button class="preset-btn" data-preset="matrix">
+      <span class="preset-dot" style="background:#00ff41"></span>Matrix
+    </button>
+    <button class="preset-btn" data-preset="neon">
+      <span class="preset-dot" style="background:#e040fb"></span>Neon
+    </button>
+    <button class="preset-btn" data-preset="chalk">
+      <span class="preset-dot" style="background:#1a1a1a; border:1px solid #555"></span>Chalk
+    </button>
+    <button class="preset-btn" data-preset="sunrise">
+      <span class="preset-dot" style="background:#ff7043"></span>Sunrise
+    </button>
+  </div>
+
+  <div class="options-row">
+    <span class="row-label">Font</span>
+    <select id="fontPicker"></select>
+
+    <div class="opt-sep"></div>
+
+    <div class="opt-group">
+      <button id="btnSound" class="active" title="Toggle sound">🔊</button>
+    </div>
+
+    <div class="opt-sep"></div>
+
+    <div class="opt-group">
+      <label class="cycle-label">
+        <input type="checkbox" id="cycleOn" checked>
+        <span>Auto-cycle every</span>
+      </label>
+      <input type="number" id="cycleInterval" value="30" min="5" max="600" step="5">
+      <span class="cycle-unit">sec</span>
+      <div class="cycle-indicator" id="cycleIndicator"></div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <span id="charCount">—</span>
+    <button id="btnFullscreen">⛶&nbsp; Full screen</button>
+  </div>
+
+</div>
+
+<a class="gh-link" href="https://github.com/NakliTechie/Clacker" target="_blank" rel="noopener">GitHub ↗</a>
+
+<script>
+'use strict';
+
+// ── Constants ────────────────────────────────────────────────────
+const COLS      = 22;
+const ROWS      = 6;
+const TILE_W    = 40;
+const TILE_H    = 58;
+const TILE_GAP  = 3;
+const FLIP_MS   = 60;
+const FLIP_FRAC = 0.35;   // lower-flap animation delay as fraction of FLIP_MS
+const FLIP_TOTAL = Math.ceil(FLIP_MS * (1 + FLIP_FRAC) + FLIP_MS + 14);
+const STEPS     = 6;      // random cycles before landing
+const STAGGER_C = 20;     // ms per column
+const STAGGER_R = 4;      // ms extra per row
+
+const CHARSET = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#()-+&=;:\'",./?';
+
+// ── Font definitions ─────────────────────────────────────────────
+const FONTS = [
+  { name: 'Impact',        stack: 'Impact, "Arial Narrow", sans-serif',          size: '28px' },
+  { name: 'Arial',         stack: 'Arial, Helvetica, sans-serif',                size: '24px' },
+  { name: 'Arial Black',   stack: '"Arial Black", "Arial Bold", sans-serif',     size: '22px' },
+  { name: 'Verdana',       stack: 'Verdana, Geneva, sans-serif',                 size: '20px' },
+  { name: 'Tahoma',        stack: 'Tahoma, Geneva, sans-serif',                  size: '22px' },
+  { name: 'Trebuchet MS',  stack: '"Trebuchet MS", Helvetica, sans-serif',       size: '22px' },
+  { name: 'Georgia',       stack: 'Georgia, "Times New Roman", serif',           size: '24px' },
+  { name: 'Times New Roman', stack: '"Times New Roman", Times, serif',           size: '24px' },
+  { name: 'Courier New',   stack: '"Courier New", Courier, monospace',           size: '22px' },
+  { name: 'Comic Sans MS', stack: '"Comic Sans MS", "Chalkboard SE", cursive',   size: '20px' },
+];
+
+// ── Presets ──────────────────────────────────────────────────────
+const PRESETS = {
+  classic: { tileBg:'#1c1c1e', tileFg:'#ffffff', tileHinge:'#000', frameBg:'#0a0a0a', frameBdr:'#252525' },
+  airport: { tileBg:'#0e0e0f', tileFg:'#ffc200', tileHinge:'#000', frameBg:'#070707', frameBdr:'#1e1e1e' },
+  matrix:  { tileBg:'#060e06', tileFg:'#00ff41', tileHinge:'#011001', frameBg:'#020802', frameBdr:'#0a1e0a' },
+  neon:    { tileBg:'#0e0015', tileFg:'#e040fb', tileHinge:'#060006', frameBg:'#080010', frameBdr:'#1a0030' },
+  chalk:   { tileBg:'#f0ede6', tileFg:'#111111', tileHinge:'#c8c4bc', frameBg:'#ddd9d0', frameBdr:'#bbb7af' },
+  sunrise: { tileBg:'#0d0a18', tileFg:'#ff7043', tileHinge:'#050310', frameBg:'#080615', frameBdr:'#1a1030' },
+};
+
+// ── State ────────────────────────────────────────────────────────
+let tiles        = [];
+let isRunning    = false;
+let cycleTimer   = null;
+let cycleIndex   = 0;
+let tickDot      = null;  // setInterval handle for the pulsing indicator
+
+// ── Sound ────────────────────────────────────────────────────────
+let audioCtx    = null;
+let flipBuffer  = null;
+let soundOn     = true;
+let lastFlipT   = 0;
+const SOUND_THROTTLE = 16; // min ms between sounds
+
+function ensureAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  flipBuffer = buildFlipBuffer(audioCtx);
+}
+
+function buildFlipBuffer(ctx) {
+  const sr  = ctx.sampleRate;
+  const dur = 0.042;
+  const n   = Math.ceil(sr * dur);
+  const buf = ctx.createBuffer(1, n, sr);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) {
+    const t     = i / sr;
+    const click = (Math.random() * 2 - 1) * Math.exp(-t * 180);
+    const body  = Math.sin(2 * Math.PI * 140 * t) * Math.exp(-t * 55) * 0.3;
+    const snap  = Math.sin(2 * Math.PI * 2800 * t) * Math.exp(-t * 380) * 0.15;
+    d[i] = (click + body + snap) * 0.75;
+  }
+  return buf;
+}
+
+function playFlip() {
+  if (!soundOn) return;
+  ensureAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const now = performance.now();
+  if (now - lastFlipT < SOUND_THROTTLE) return;
+  lastFlipT = now;
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = flipBuffer;
+  src.playbackRate.value = 0.82 + Math.random() * 0.36;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.28;
+  src.connect(gain);
+  gain.connect(audioCtx.destination);
+  src.start();
+}
+
+// ── Board builder ────────────────────────────────────────────────
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  tiles = [];
+  for (let r = 0; r < ROWS; r++) {
+    tiles[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      const el = makeTileEl(' ');
+      board.appendChild(el);
+      tiles[r][c] = { el, char: ' ' };
+    }
+  }
+}
+
+function makeTileEl(ch) {
+  const tile = document.createElement('div');
+  tile.className = 'tile';
+
+  const make = (cls) => {
+    const wrap = document.createElement('div');
+    wrap.className = cls;
+    const inner = document.createElement('div');
+    inner.className = 'hi';
+    inner.textContent = ch;
+    wrap.appendChild(inner);
+    return wrap;
+  };
+
+  tile.appendChild(make('half upper'));
+  tile.appendChild(make('half lower'));
+  tile.appendChild(make('flap upper-flap'));
+  tile.appendChild(make('flap lower-flap'));
+
+  const hinge = document.createElement('div');
+  hinge.className = 'tile-hinge';
+  tile.appendChild(hinge);
+
+  return tile;
+}
+
+// ── Core flip animation ──────────────────────────────────────────
+function flipTile(tileObj, fromCh, toCh) {
+  return new Promise(resolve => {
+    const el  = tileObj.el;
+    const suI = el.querySelector('.half.upper .hi');
+    const slI = el.querySelector('.half.lower .hi');
+    const fu  = el.querySelector('.flap.upper-flap');
+    const fl  = el.querySelector('.flap.lower-flap');
+
+    suI.textContent = fromCh;
+    slI.textContent = fromCh;
+    fu.querySelector('.hi').textContent = fromCh;
+    fl.querySelector('.hi').textContent = toCh;
+
+    fu.style.animation = 'none';
+    fl.style.animation = 'none';
+    fu.style.transform  = 'rotateX(0deg)';
+    fl.style.transform  = 'rotateX(90deg)';
+    void el.offsetHeight; // force reflow
+
+    fu.style.animation = '';
+    fl.style.animation = '';
+    fu.style.transform  = '';
+    fl.style.transform  = '';
+
+    el.classList.add('flipping');
+    playFlip();
+
+    setTimeout(() => {
+      el.classList.remove('flipping');
+      suI.textContent = toCh;
+      slI.textContent = toCh;
+      fu.querySelector('.hi').textContent = toCh;
+      fl.querySelector('.hi').textContent = toCh;
+      fu.style.animation = 'none'; fu.style.transform = 'rotateX(0deg)';
+      fl.style.animation = 'none'; fl.style.transform = 'rotateX(90deg)';
+      tileObj.char = toCh;
+      resolve();
+    }, FLIP_TOTAL);
+  });
+}
+
+async function animateTile(tileObj, targetCh, delay) {
+  if (delay > 0) await sleep(delay);
+  const seq = Array.from({ length: STEPS }, () =>
+    CHARSET[Math.floor(Math.random() * CHARSET.length)]
+  );
+  seq.push(targetCh);
+  let prev = tileObj.char;
+  for (const ch of seq) { await flipTile(tileObj, prev, ch); prev = ch; }
+}
+
+// ── Text engine ──────────────────────────────────────────────────
+function wrapText(raw) {
+  const text = raw.toUpperCase().replace(/[^A-Z0-9 !@#()\-+=&;:'",./?↑↓→←\n]/g, '?');
+  const segments = text.split('\n');
+  const lines = [];
+
+  for (const seg of segments) {
+    if (lines.length >= ROWS) break;
+    if (seg.trim() === '') { lines.push(''); continue; }
+
+    const words = seg.split(' ');
+    let current = '';
+    for (const word of words) {
+      if (!word) { if (current) current += ' '; continue; }
+      const candidate = current ? current + ' ' + word : word;
+      if (candidate.length <= COLS) {
+        current = candidate;
+      } else if (word.length > COLS) {
+        if (current) { lines.push(current); current = ''; }
+        for (let i = 0; i < word.length; i += COLS) {
+          const chunk = word.slice(i, i + COLS);
+          if (i + COLS < word.length) lines.push(chunk);
+          else current = chunk;
+        }
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+    if (current !== undefined) lines.push(current);
+  }
+
+  const grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    const line = (lines[r] || '').slice(0, COLS);
+    const padL = Math.floor((COLS - line.length) / 2);
+    grid.push((line ? ' '.repeat(padL) + line : '').padEnd(COLS, ' '));
+  }
+  return grid;
+}
+
+function getMessages() {
+  const text = document.getElementById('textInput').value;
+  const parts = text.split(/^---+$/m).map(s => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : [text.trim() || ' '];
+}
+
+// ── Run ──────────────────────────────────────────────────────────
+async function runMessage(text) {
+  if (isRunning) return;
+  const grid = wrapText(text);
+  isRunning = true;
+  document.getElementById('btnRun').disabled = true;
+
+  const jobs = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const target = grid[r][c];
+      if (target !== tiles[r][c].char) {
+        const delay = c * STAGGER_C + r * STAGGER_R + Math.random() * 25;
+        jobs.push(animateTile(tiles[r][c], target, delay));
+      }
+    }
+  }
+
+  await Promise.all(jobs);
+  isRunning = false;
+  document.getElementById('btnRun').disabled = false;
+}
+
+async function run() {
+  stopCycle();
+  const msgs = getMessages();
+  cycleIndex = 0;
+  await runMessage(msgs[0] || ' ');
+  if (document.getElementById('cycleOn').checked) startCycle();
+}
+
+// ── Auto-cycle ───────────────────────────────────────────────────
+function startCycle() {
+  stopCycle();
+  const secs = Math.max(5, parseInt(document.getElementById('cycleInterval').value) || 30);
+  const indicator = document.getElementById('cycleIndicator');
+
+  // Pulse the dot as a countdown visual
+  let elapsed = 0;
+  tickDot = setInterval(() => {
+    elapsed += 1000;
+    const pct = elapsed / (secs * 1000);
+    const brightness = 0.25 + 0.75 * Math.min(pct * 2, 1); // grows brighter
+    indicator.style.background = `rgba(76, 175, 80, ${brightness})`;
+    if (elapsed >= secs * 1000) {
+      clearInterval(tickDot); tickDot = null;
+    }
+  }, 1000);
+
+  indicator.classList.add('ticking');
+
+  cycleTimer = setTimeout(async () => {
+    if (isRunning) { startCycle(); return; }
+    const msgs = getMessages();
+    cycleIndex = (cycleIndex + 1) % msgs.length;
+    await runMessage(msgs[cycleIndex]);
+    if (document.getElementById('cycleOn').checked) startCycle();
+  }, secs * 1000);
+}
+
+function stopCycle() {
+  if (cycleTimer)  { clearTimeout(cycleTimer);   cycleTimer = null; }
+  if (tickDot)     { clearInterval(tickDot);      tickDot = null; }
+  const ind = document.getElementById('cycleIndicator');
+  if (ind) { ind.classList.remove('ticking'); ind.style.background = ''; }
+}
+
+// ── Preset ───────────────────────────────────────────────────────
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  const wrap = document.getElementById('boardWrap');
+  wrap.style.setProperty('--tile-bg',    p.tileBg);
+  wrap.style.setProperty('--tile-fg',    p.tileFg);
+  wrap.style.setProperty('--tile-hinge', p.tileHinge);
+  wrap.style.background  = p.frameBg;
+  wrap.style.borderColor = p.frameBdr;
+  document.querySelectorAll('.preset-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === name)
+  );
+}
+
+// ── Font ─────────────────────────────────────────────────────────
+function buildFontPicker() {
+  const sel = document.getElementById('fontPicker');
+  FONTS.forEach((f, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = f.name;
+    sel.appendChild(opt);
+  });
+  sel.value = 0;
+}
+
+function applyFont(idx) {
+  const f = FONTS[idx];
+  if (!f) return;
+  const board = document.getElementById('board');
+  board.style.setProperty('--tile-font-family', f.stack);
+  board.style.setProperty('--tile-font', f.size);
+}
+
+// ── Fullscreen ───────────────────────────────────────────────────
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+function handleFullscreenChange() {
+  const isFs = !!document.fullscreenElement;
+  document.body.classList.toggle('fullscreen-active', isFs);
+  document.getElementById('btnFullscreen').textContent =
+    isFs ? '✕  Exit full screen' : '⛶\u00a0 Full screen';
+
+  const board = document.getElementById('board');
+  if (isFs) {
+    const bW    = COLS * (TILE_W + TILE_GAP) - TILE_GAP;
+    const bH    = ROWS * (TILE_H + TILE_GAP) - TILE_GAP;
+    const scale = Math.min((window.innerWidth * 0.93) / bW, (window.innerHeight * 0.90) / bH, 3.5);
+    board.style.transform       = `scale(${scale})`;
+    board.style.transformOrigin = 'center center';
+  } else {
+    board.style.transform       = '';
+    board.style.transformOrigin = '';
+    adjustBoardScale();
+  }
+}
+
+// ── Responsive scale ─────────────────────────────────────────────
+function adjustBoardScale() {
+  if (document.fullscreenElement) return;
+  const wrap     = document.getElementById('boardWrap');
+  const board    = document.getElementById('board');
+  const naturalW = COLS * (TILE_W + TILE_GAP) - TILE_GAP + 2 * 20;
+  const available = window.innerWidth - 32;
+  if (available < naturalW) {
+    const scale = available / naturalW;
+    board.style.transform       = `scale(${scale})`;
+    board.style.transformOrigin = 'top center';
+    wrap.style.height   = ((ROWS * (TILE_H + TILE_GAP) - TILE_GAP) * scale + 40) + 'px';
+    wrap.style.overflow = 'hidden';
+  } else {
+    board.style.transform       = '';
+    board.style.transformOrigin = '';
+    wrap.style.height   = '';
+    wrap.style.overflow = '';
+  }
+}
+
+// ── Char count ───────────────────────────────────────────────────
+function updateCharCount() {
+  const msgs = getMessages();
+  const m    = msgs[0] || ' ';
+  const grid = wrapText(m);
+  const used = grid.join('').replace(/ /g, '').length;
+  const rows = grid.filter(l => l.trim().length > 0).length;
+  const slides = msgs.length;
+  document.getElementById('charCount').textContent =
+    `${used} chars · ${rows}/${ROWS} rows` +
+    (slides > 1 ? ` · ${slides} slides` : '');
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Events ───────────────────────────────────────────────────────
+document.getElementById('btnRun').addEventListener('click', run);
+
+document.getElementById('textInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
+});
+
+document.getElementById('textInput').addEventListener('input', updateCharCount);
+
+document.querySelectorAll('.preset-btn').forEach(btn =>
+  btn.addEventListener('click', () => applyPreset(btn.dataset.preset))
+);
+
+document.getElementById('fontPicker').addEventListener('change', e =>
+  applyFont(parseInt(e.target.value))
+);
+
+document.getElementById('btnSound').addEventListener('click', () => {
+  soundOn = !soundOn;
+  document.getElementById('btnSound').textContent = soundOn ? '🔊' : '🔇';
+  document.getElementById('btnSound').classList.toggle('active', soundOn);
+});
+
+document.getElementById('cycleOn').addEventListener('change', e => {
+  document.getElementById('cycleInterval').disabled = !e.target.checked;
+  if (e.target.checked) {
+    startCycle();
+  } else {
+    stopCycle();
+  }
+});
+
+document.getElementById('cycleInterval').addEventListener('change', () => {
+  if (document.getElementById('cycleOn').checked && !isRunning) {
+    stopCycle();
+    startCycle();
+  }
+});
+
+document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', handleFullscreenChange);
+document.getElementById('boardWrap').addEventListener('dblclick', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'f' && !e.target.matches('textarea, input')) toggleFullscreen();
+});
+
+window.addEventListener('resize', adjustBoardScale);
+
+// Help popover
+const btnHelp    = document.getElementById('btnHelp');
+const helpPopover = document.getElementById('helpPopover');
+
+btnHelp.addEventListener('click', e => {
+  e.stopPropagation();
+  const open = helpPopover.classList.toggle('open');
+  btnHelp.classList.toggle('open', open);
+});
+
+document.addEventListener('click', () => {
+  helpPopover.classList.remove('open');
+  btnHelp.classList.remove('open');
+});
+
+// ── Init ─────────────────────────────────────────────────────────
+buildBoard();
+buildFontPicker();
+applyPreset('classic');
+applyFont(0);
+adjustBoardScale();
+
+// Populate textarea with multi-row test content (includes blank rows + multiple slides)
+document.getElementById('textInput').value =
+`GATE A14  LONDON
+DEPARTURE 09:30
+
+DELAYED
+
+STATUS BOARDING
+---
+CLACKER
+
+SPLIT FLAP DISPLAY
+IN YOUR BROWSER
+---
+HELLO WORLD
+ROW TWO IS HERE
+
+ROW FOUR
+
+ROW SIX`;
+
+updateCharCount();
+
+// Welcome animation on load
+(async () => {
+  await sleep(250);
+  await runMessage('GATE A14  LONDON\nDEPARTURE 09:30\n\nDELAYED\n\nSTATUS BOARDING');
+  if (document.getElementById('cycleOn').checked) startCycle();
+})();
+</script>
+</body>
+</html>
