@@ -109,6 +109,12 @@ Built for ambient displays, presentations, digital signage, or just the satisfac
 | [**KingMe**](https://github.com/NakliTechie/KingMe) | English draughts — custom minimax AI, zero deps |
 | [**SnipLocal**](https://github.com/NakliTechie/SnipLocal) | Background remover — RMBG-1.4, passport mode |
 | **Clacker** | Split-flap display — browser-native, offline |
+| [**Strait Command**](https://github.com/NakliTechie/strait-command) | Mine-clearing game in strategic waterways |
+| [**Chokepoint**](https://github.com/NakliTechie/chokepoint) | Maritime tower defense — hold the strait |
+| [**PredictionMarket**](https://github.com/NakliTechie/PredictionMarket) | Prediction market simulator — Parimutuel & LMSR |
+| **PDFLOcal** | PDF editor — merge, split, rotate, annotate |
+| **RangeLocal** | Missile range simulator — interactive globe & map |
+| [**3D Tic-Tac-Toe**](https://github.com/NakliTechie/3d-tic-tac-toe) | 3D tic-tac-toe — 3×3×3 to 5×5×5, minimax AI |
 
 ---
 
