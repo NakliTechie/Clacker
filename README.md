@@ -13,7 +13,8 @@ Clacker is part of the **NakliTechie** series of browser-native tools: single-fi
 - **Split-flap animation** — Each tile cycles through random characters before landing, with a staggered column-by-column cascade — exactly like a real departure board.
 - **Mechanical sound** — Click sounds generated in real-time via the Web Audio API. Each flip has a slightly randomised pitch and timing for an authentic clatter.
 - **6 colour presets** — Classic (white on black), Airport (amber), Matrix (green), Neon (violet), Chalk (inverted), Sunrise (orange).
-- **10 font choices** — Impact (default), Arial, Arial Black, Verdana, Tahoma, Trebuchet MS, Georgia, Times New Roman, Courier New, Comic Sans.
+- **Colour burst** — Optional effect (off by default) that flashes each tile through a vivid palette during the scramble phase. Palette is tuned per preset so it always feels cohesive — neons for Classic, greens for Matrix, pastels for Chalk, fire tones for Sunrise, and so on. Landing flip is always clean.
+- **10 font choices** — Arial (default), Impact, Arial Black, Verdana, Tahoma, Trebuchet MS, Georgia, Times New Roman, Courier New, Comic Sans.
 - **Multiple slides** — Separate messages with `---` on its own line. Auto-cycle flips through them at a configurable interval.
 - **Auto-cycle** — Board animates through slides automatically. Default interval: 30 seconds. Configurable from 5 to 600 seconds.
 - **Fullscreen mode** — Board scales to fill the screen. One keypress in, one keypress out.
