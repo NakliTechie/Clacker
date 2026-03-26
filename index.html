@@ -124,8 +124,8 @@ header {
   width: 100%;
   height: calc(var(--tile-h) / 2);
   overflow: hidden;
-  background: var(--tile-bg);
-  transition: background 0.3s;
+  background-color: var(--burst-bg, var(--tile-bg));
+  transition: background-color 0.3s;
 }
 
 .half.upper {
@@ -163,11 +163,15 @@ header {
   width: 100%;
   height: calc(var(--tile-h) / 2);
   overflow: hidden;
-  background: var(--tile-bg);
+  background-color: var(--burst-bg, var(--tile-bg));
   z-index: 10;
   backface-visibility: hidden;
-  transition: background 0.3s;
+  transition: background-color 0.3s;
 }
+
+/* Colour burst: snap colour instantly, no transition lag */
+.tile.burst .half,
+.tile.burst .flap { transition: none; }
 
 .flap.upper-flap {
   top: 0;
@@ -360,20 +364,20 @@ header {
 #fontPicker option { background: #1a1a1a; }
 
 /* Sound button */
-#btnSound {
+#btnSound, #btnBurst {
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
   border-radius: 5px;
   color: #666;
-  font-size: 14px;
+  font-size: 13px;
   padding: 4px 10px;
   cursor: pointer;
   transition: all 0.15s;
   line-height: 1.4;
 }
 
-#btnSound:hover { border-color: #444; color: #aaa; }
-#btnSound.active { border-color: #666; color: #eee; background: #222; }
+#btnSound:hover, #btnBurst:hover { border-color: #444; color: #aaa; }
+#btnSound.active, #btnBurst.active { border-color: #666; color: #eee; background: #222; }
 
 /* Cycle controls */
 .cycle-label {
@@ -601,6 +605,7 @@ body.fullscreen-active .gh-link { display: none; }
       <div class="help-row"><span class="help-desc">Style presets</span><span class="help-key">colour themes</span></div>
       <div class="help-row"><span class="help-desc">Font picker</span><span class="help-key">10 typefaces</span></div>
       <div class="help-row"><span class="help-desc">🔊 / 🔇</span><span class="help-desc">toggle flip sounds</span></div>
+      <div class="help-row"><span class="help-desc">🌈 Burst</span><span class="help-desc">preset-matched colour flash during scramble</span></div>
       <div class="help-row"><span class="help-desc">Auto-cycle interval</span><span class="help-key">5 – 600 sec</span></div>
 
     </div>
@@ -650,6 +655,7 @@ body.fullscreen-active .gh-link { display: none; }
 
     <div class="opt-group">
       <button id="btnSound" class="active" title="Toggle sound">🔊</button>
+      <button id="btnBurst" title="Colour burst during flip (off by default)">🌈 Burst</button>
     </div>
 
     <div class="opt-sep"></div>
@@ -708,20 +714,46 @@ const FONTS = [
 
 // ── Presets ──────────────────────────────────────────────────────
 const PRESETS = {
-  classic: { tileBg:'#1c1c1e', tileFg:'#ffffff', tileHinge:'#000', frameBg:'#0a0a0a', frameBdr:'#252525' },
-  airport: { tileBg:'#0e0e0f', tileFg:'#ffc200', tileHinge:'#000', frameBg:'#070707', frameBdr:'#1e1e1e' },
-  matrix:  { tileBg:'#060e06', tileFg:'#00ff41', tileHinge:'#011001', frameBg:'#020802', frameBdr:'#0a1e0a' },
-  neon:    { tileBg:'#0e0015', tileFg:'#e040fb', tileHinge:'#060006', frameBg:'#080010', frameBdr:'#1a0030' },
-  chalk:   { tileBg:'#f0ede6', tileFg:'#111111', tileHinge:'#c8c4bc', frameBg:'#ddd9d0', frameBdr:'#bbb7af' },
-  sunrise: { tileBg:'#0d0a18', tileFg:'#ff7043', tileHinge:'#050310', frameBg:'#080615', frameBdr:'#1a1030' },
+  classic: {
+    tileBg:'#1c1c1e', tileFg:'#ffffff', tileHinge:'#000', frameBg:'#0a0a0a', frameBdr:'#252525',
+    // Vivid neons — anything goes on a dark neutral tile
+    burst: ['#00AAFF', '#00FFCC', '#AA00FF', '#FF2D00', '#FFCC00', '#FF0077'],
+  },
+  airport: {
+    tileBg:'#0e0e0f', tileFg:'#ffc200', tileHinge:'#000', frameBg:'#070707', frameBdr:'#1e1e1e',
+    // Warm family — ambers, oranges, deep reds
+    burst: ['#FF8C00', '#FF4500', '#FFD700', '#FF6000', '#FFA500', '#FF3300'],
+  },
+  matrix:  {
+    tileBg:'#060e06', tileFg:'#00ff41', tileHinge:'#011001', frameBg:'#020802', frameBdr:'#0a1e0a',
+    // Green spectrum — electric greens and yellow-greens
+    burst: ['#00FF41', '#39FF14', '#ADFF2F', '#00FA9A', '#76FF03', '#CCFF00'],
+  },
+  neon:    {
+    tileBg:'#0e0015', tileFg:'#e040fb', tileHinge:'#060006', frameBg:'#080010', frameBdr:'#1a0030',
+    // Pink/purple family — magentas, violets, hot pinks
+    burst: ['#FF00FF', '#FF00AA', '#CC00FF', '#FF40CC', '#9900FF', '#FF00DD'],
+  },
+  chalk:   {
+    tileBg:'#f0ede6', tileFg:'#111111', tileHinge:'#c8c4bc', frameBg:'#ddd9d0', frameBdr:'#bbb7af',
+    // Soft pastels — readable with dark text, gentle on the light frame
+    burst: ['#FFB3C6', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#E0BBFF'],
+  },
+  sunrise: {
+    tileBg:'#0d0a18', tileFg:'#ff7043', tileHinge:'#050310', frameBg:'#080615', frameBdr:'#1a1030',
+    // Fire palette — oranges, crimsons, ember reds
+    burst: ['#FF4500', '#FF1744', '#FF6D00', '#FF3D00', '#FF6B35', '#FF8C00'],
+  },
 };
 
 // ── State ────────────────────────────────────────────────────────
-let tiles        = [];
-let isRunning    = false;
-let cycleTimer   = null;
-let cycleIndex   = 0;
-let tickDot      = null;  // setInterval handle for the pulsing indicator
+let tiles             = [];
+let isRunning         = false;
+let cycleTimer        = null;
+let cycleIndex        = 0;
+let tickDot           = null;
+let colourBurstOn     = false;
+let currentBurstColors = [];
 
 // ── Sound ────────────────────────────────────────────────────────
 let audioCtx    = null;
@@ -812,7 +844,7 @@ function makeTileEl(ch) {
 }
 
 // ── Core flip animation ──────────────────────────────────────────
-function flipTile(tileObj, fromCh, toCh) {
+function flipTile(tileObj, fromCh, toCh, burstColor = null) {
   return new Promise(resolve => {
     const el  = tileObj.el;
     const suI = el.querySelector('.half.upper .hi');
@@ -829,6 +861,12 @@ function flipTile(tileObj, fromCh, toCh) {
     fl.style.animation = 'none';
     fu.style.transform  = 'rotateX(0deg)';
     fl.style.transform  = 'rotateX(90deg)';
+
+    if (burstColor) {
+      el.style.setProperty('--burst-bg', burstColor);
+      el.classList.add('burst');
+    }
+
     void el.offsetHeight; // force reflow
 
     fu.style.animation = '';
@@ -841,6 +879,8 @@ function flipTile(tileObj, fromCh, toCh) {
 
     setTimeout(() => {
       el.classList.remove('flipping');
+      el.classList.remove('burst');
+      el.style.removeProperty('--burst-bg');
       suI.textContent = toCh;
       slI.textContent = toCh;
       fu.querySelector('.hi').textContent = toCh;
@@ -860,7 +900,14 @@ async function animateTile(tileObj, targetCh, delay) {
   );
   seq.push(targetCh);
   let prev = tileObj.char;
-  for (const ch of seq) { await flipTile(tileObj, prev, ch); prev = ch; }
+  for (let i = 0; i < seq.length; i++) {
+    const isLanding  = i === seq.length - 1;
+    const burstColor = (!isLanding && colourBurstOn && currentBurstColors.length)
+      ? currentBurstColors[i % currentBurstColors.length]
+      : null;
+    await flipTile(tileObj, prev, seq[i], burstColor);
+    prev = seq[i];
+  }
 }
 
 // ── Text engine ──────────────────────────────────────────────────
@@ -987,6 +1034,7 @@ function applyPreset(name) {
   wrap.style.setProperty('--tile-hinge', p.tileHinge);
   wrap.style.background  = p.frameBg;
   wrap.style.borderColor = p.frameBdr;
+  currentBurstColors = p.burst || [];
   document.querySelectorAll('.preset-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.preset === name)
   );
@@ -1099,6 +1147,11 @@ document.getElementById('btnSound').addEventListener('click', () => {
   soundOn = !soundOn;
   document.getElementById('btnSound').textContent = soundOn ? '🔊' : '🔇';
   document.getElementById('btnSound').classList.toggle('active', soundOn);
+});
+
+document.getElementById('btnBurst').addEventListener('click', () => {
+  colourBurstOn = !colourBurstOn;
+  document.getElementById('btnBurst').classList.toggle('active', colourBurstOn);
 });
 
 document.getElementById('cycleOn').addEventListener('change', e => {
