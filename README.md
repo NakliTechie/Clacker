@@ -96,6 +96,12 @@ A real Vestaboard costs $995, needs Wi-Fi, an account, and a companion app. Clac
 
 Built for ambient displays, presentations, digital signage, or just the satisfaction of watching characters clack into place.
 
+## Palette
+
+Coloured with **`brutalism-10 · BRUTALIST NIGHT`** — concrete hulk against sodium sky, the era of departures-board control rooms. Concrete-grey body, sodium-amber wordmark and RUN button. Note: the six user-selectable style presets (Classic, Airport, Matrix, Neon, Chalk, Sunrise) remain unchanged — Brutalist Night is the chrome around them.
+
+Palette pulled from [**Rangrez**](https://github.com/NakliTechie/rangrez), the global colour-palette library that backs all NakliTechie projects.
+
 ---
 
 ## Part of the NakliTechie series
